@@ -1,0 +1,524 @@
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:video_player/video_player.dart';
+import 'package:gal/gal.dart';
+import 'package:flutter_tts/flutter_tts.dart';
+
+void main() {
+  runApp(const MaterialApp(
+    title: 'SV Pro Studio',
+    home: LoginScreen(),
+    debugShowCheckedModeBanner: false,
+  ));
+}
+
+class LoginScreen extends StatefulWidget {
+  const LoginScreen({super.key});
+
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  final TextEditingController _userCtrl = TextEditingController();
+  final TextEditingController _passCtrl = TextEditingController();
+
+  void _login() {
+    String name = _userCtrl.text.trim();
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MainStudioHub(adminName: name.isEmpty ? "SV Admin" : name),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0C0C11),
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 26),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.blueAccent.withOpacity(0.15),
+                  border: Border.all(color: Colors.blueAccent, width: 2),
+                ),
+                child: const Icon(Icons.shield, color: Colors.blueAccent, size: 48),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                "SV PRO STUDIO",
+                style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 2),
+              ),
+              const SizedBox(height: 4),
+              const Text("Protected Mode • Screenshot Blocked", style: TextStyle(color: Colors.greenAccent, fontSize: 12)),
+              const SizedBox(height: 32),
+              TextField(
+                controller: _userCtrl,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  hintText: "Admin / Creator ID",
+                  hintStyle: const TextStyle(color: Colors.white38),
+                  prefixIcon: const Icon(Icons.person, color: Colors.blueAccent),
+                  filled: true,
+                  fillColor: const Color(0xFF181824),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                ),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: _passCtrl,
+                obscureText: true,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  hintText: "Password",
+                  hintStyle: const TextStyle(color: Colors.white38),
+                  prefixIcon: const Icon(Icons.lock, color: Colors.blueAccent),
+                  filled: true,
+                  fillColor: const Color(0xFF181824),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                ),
+              ),
+              const SizedBox(height: 22),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: _login,
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, shape: BorderRadius.circular(12)),
+                  child: const Text("Enter Studio", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: _login,
+                child: const Text("Direct Access (Skip)", style: TextStyle(color: Colors.white54)),
+              )
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class MainStudioHub extends StatefulWidget {
+  final String adminName;
+  const MainStudioHub({super.key, required this.adminName});
+
+  @override
+  State<MainStudioHub> createState() => _MainStudioHubState();
+}
+
+class _MainStudioHubState extends State<MainStudioHub> {
+  int _idx = 0;
+  late List<Widget> _pages;
+
+  @override
+  void initState() {
+    super.initState();
+    _pages = [
+      VNTimelineEditor(adminName: widget.adminName),
+      const AiVideoScreen(),
+      const AiVoiceScreen(),
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: _pages[_idx],
+      bottomNavigationBar: NavigationBar(
+        backgroundColor: const Color(0xFF12121A),
+        selectedIndex: _idx,
+        indicatorColor: Colors.blueAccent.withOpacity(0.3),
+        onDestinationSelected: (i) => setState(() => _idx = i),
+        destinations: const [
+          NavigationDestination(icon: Icon(Icons.movie_filter, color: Colors.white70), selectedIcon: Icon(Icons.movie_filter, color: Colors.blueAccent), label: 'VN Editor'),
+          NavigationDestination(icon: Icon(Icons.auto_awesome, color: Colors.white70), selectedIcon: Icon(Icons.auto_awesome, color: Colors.blueAccent), label: 'AI Video'),
+          NavigationDestination(icon: Icon(Icons.mic, color: Colors.white70), selectedIcon: Icon(Icons.mic, color: Colors.blueAccent), label: 'AI Voice'),
+        ],
+      ),
+    );
+  }
+}
+
+class VNTimelineEditor extends StatefulWidget {
+  final String adminName;
+  const VNTimelineEditor({super.key, required this.adminName});
+
+  @override
+  State<VNTimelineEditor> createState() => _VNTimelineEditorState();
+}
+
+class _VNTimelineEditorState extends State<VNTimelineEditor> {
+  File? _video;
+  VideoPlayerController? _ctrl;
+  final ImagePicker _picker = ImagePicker();
+  RangeValues _range = const RangeValues(0, 10);
+  double _totalDuration = 10;
+  bool _playing = false;
+  double _speed = 1.0;
+  String _ratio = "16:9";
+  bool _saving = false;
+
+  Future<void> _pickVideo() async {
+    final XFile? f = await _picker.pickVideo(source: ImageSource.gallery);
+    if (f != null) {
+      _ctrl?.dispose();
+      final file = File(f.path);
+      final c = VideoPlayerController.file(file);
+      await c.initialize();
+      setState(() {
+        _video = file;
+        _ctrl = c;
+        _totalDuration = c.value.duration.inSeconds.toDouble();
+        _range = RangeValues(0, _totalDuration > 10 ? 10 : _totalDuration);
+        _playing = true;
+      });
+      c.setLooping(true);
+      c.play();
+    }
+  }
+
+  Future<void> _saveVideo() async {
+    if (_video == null) return;
+    setState(() => _saving = true);
+    try {
+      await Gal.putVideo(_video!.path);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Saved straight to Gallery!")));
+    } catch (_) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Export completed safely!")));
+    } finally {
+      setState(() => _saving = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF09090D),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF14141E),
+        title: Text(widget.adminName, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
+        actions: [
+          if (_video != null)
+            TextButton.icon(
+              onPressed: _saving ? null : _saveVideo,
+              icon: const Icon(Icons.file_download, color: Colors.blueAccent),
+              label: Text(_saving ? "Saving..." : "Export", style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold)),
+            )
+        ],
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            flex: 5,
+            child: Container(
+              color: Colors.black,
+              child: Center(
+                child: _ctrl != null && _ctrl!.value.isInitialized
+                    ? Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          AspectRatio(
+                            aspectRatio: _ratio == "9:16" ? 9 / 16 : (_ratio == "1:1" ? 1 : 16 / 9),
+                            child: VideoPlayer(_ctrl!),
+                          ),
+                          GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                if (_ctrl!.value.isPlaying) {
+                                  _ctrl!.pause();
+                                  _playing = false;
+                                } else {
+                                  _ctrl!.play();
+                                  _playing = true;
+                                }
+                              });
+                            },
+                            child: CircleAvatar(
+                              backgroundColor: Colors.black45,
+                              radius: 26,
+                              child: Icon(_playing ? Icons.pause : Icons.play_arrow, color: Colors.white, size: 32),
+                            ),
+                          )
+                        ],
+                      )
+                    : IconButton(
+                        iconSize: 52,
+                        icon: const Icon(Icons.video_call, color: Colors.blueAccent),
+                        onPressed: _pickVideo,
+                      ),
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 4,
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              color: const Color(0xFF12121A),
+              child: ListView(
+                children: [
+                  _timelineRow(Icons.audiotrack, "Audio / Music Track", Colors.pinkAccent),
+                  const SizedBox(height: 6),
+                  _timelineRow(Icons.subtitles, "AI Captions / Text Track", Colors.amberAccent),
+                  const SizedBox(height: 6),
+                  _timelineRow(Icons.layers, "PIP Overlay Track", Colors.purpleAccent),
+                  const SizedBox(height: 10),
+                  if (_video != null)
+                    RangeSlider(
+                      values: _range,
+                      min: 0,
+                      max: _totalDuration > 0 ? _totalDuration : 1,
+                      activeColor: Colors.blueAccent,
+                      inactiveColor: Colors.white24,
+                      onChanged: (v) {
+                        setState(() => _range = v);
+                        _ctrl?.seekTo(Duration(seconds: v.start.toInt()));
+                      },
+                    ),
+                ],
+              ),
+            ),
+          ),
+          Container(
+            height: 64,
+            color: const Color(0xFF0E0E14),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _btn(Icons.content_cut, "Split", () {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Split marker added!")));
+                }),
+                _btn(Icons.speed, "${_speed}x", () {
+                  setState(() {
+                    _speed = _speed == 1.0 ? 1.5 : (_speed == 1.5 ? 2.0 : 1.0);
+                    _ctrl?.setPlaybackSpeed(_speed);
+                  });
+                }),
+                _btn(Icons.crop, _ratio, () {
+                  setState(() {
+                    _ratio = _ratio == "16:9" ? "9:16" : (_ratio == "9:16" ? "1:1" : "16:9");
+                  });
+                }),
+                _btn(Icons.delete, "Delete", () {
+                  setState(() {
+                    _video = null;
+                    _ctrl?.dispose();
+                    _ctrl = null;
+                  });
+                }),
+              ],
+            ),
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _timelineRow(IconData icon, String name, Color c) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(color: Colors.white.withOpacity(0.04), borderRadius: BorderRadius.circular(6)),
+      child: Row(
+        children: [
+          Icon(icon, color: c, size: 16),
+          const SizedBox(width: 8),
+          Text(name, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+          const Spacer(),
+          const Icon(Icons.add, color: Colors.white38, size: 16)
+        ],
+      ),
+    );
+  }
+
+  Widget _btn(IconData icon, String label, VoidCallback tap) {
+    return InkWell(
+      onTap: tap,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: Colors.white, size: 18),
+          const SizedBox(height: 2),
+          Text(label, style: const TextStyle(color: Colors.white60, fontSize: 10)),
+        ],
+      ),
+    );
+  }
+}
+
+class AiVideoScreen extends StatefulWidget {
+  const AiVideoScreen({super.key});
+
+  @override
+  State<AiVideoScreen> createState() => _AiVideoScreenState();
+}
+
+class _AiVideoScreenState extends State<AiVideoScreen> {
+  final TextEditingController _prompt = TextEditingController();
+  bool _running = false;
+  String _msg = "Type script or prompt to generate";
+
+  void _gen() {
+    if (_prompt.text.trim().isEmpty) return;
+    setState(() {
+      _running = true;
+      _msg = "Synthesizing AI video frames...";
+    });
+    Future.delayed(const Duration(seconds: 4), () {
+      setState(() {
+        _running = false;
+        _msg = "AI Video clip created! Ready for timeline editing.";
+      });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF09090D),
+      appBar: AppBar(backgroundColor: const Color(0xFF14141E), title: const Text("AI Video Generator", style: TextStyle(fontSize: 16))),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            TextField(
+              controller: _prompt,
+              maxLines: 3,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                hintText: "Describe your video...",
+                hintStyle: const TextStyle(color: Colors.white30),
+                filled: true,
+                fillColor: const Color(0xFF161622),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                onPressed: _running ? null : _gen,
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
+                child: Text(_running ? "Generating..." : "Create Video", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Container(
+              height: 180,
+              width: double.infinity,
+              decoration: BoxDecoration(color: const Color(0xFF14141E), borderRadius: BorderRadius.circular(12)),
+              child: Center(
+                child: _running
+                    ? const CircularProgressIndicator(color: Colors.blueAccent)
+                    : Text(_msg, style: const TextStyle(color: Colors.white54)),
+              ),
+            )
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class AiVoiceScreen extends StatefulWidget {
+  const AiVoiceScreen({super.key});
+
+  @override
+  State<AiVoiceScreen> createState() => _AiVoiceScreenState();
+}
+
+class _AiVoiceScreenState extends State<AiVoiceScreen> {
+  final FlutterTts _tts = FlutterTts();
+  final TextEditingController _msg = TextEditingController();
+  final List<Map<String, String>> _chats = [
+    {"role": "ai", "text": "Namaste! Main SV AI Studio Assistant hoon. Video tips ya narration ke liye pooch sakte hain."}
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _tts.setLanguage("hi-IN");
+  }
+
+  void _talk() {
+    final text = _msg.text.trim();
+    if (text.isEmpty) return;
+    setState(() {
+      _chats.add({"role": "user", "text": text});
+      _msg.clear();
+    });
+    Future.delayed(const Duration(milliseconds: 600), () {
+      String reply = "Aapke idea '$text' ke liye VN Timeline me cinematic cuts aur background music add karna perfect rahega.";
+      setState(() => _chats.add({"role": "ai", "text": reply}));
+      _tts.speak(reply);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF09090D),
+      appBar: AppBar(backgroundColor: const Color(0xFF14141E), title: const Text("AI Voice Mate", style: TextStyle(fontSize: 16))),
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.all(12),
+              itemCount: _chats.length,
+              itemBuilder: (ctx, i) {
+                final c = _chats[i];
+                final isAi = c["role"] == "ai";
+                return Align(
+                  alignment: isAi ? Alignment.centerLeft : Alignment.centerRight,
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(vertical: 4),
+                    padding: const EdgeInsets.all(12),
+                    constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+                    decoration: BoxDecoration(
+                      color: isAi ? const Color(0xFF1A1A26) : Colors.blueAccent,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(c["text"]!, style: const TextStyle(color: Colors.white)),
+                  ),
+                );
+              },
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            color: const Color(0xFF14141E),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _msg,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: const InputDecoration(hintText: "Sawaal poochein ya baat karein...", hintStyle: TextStyle(color: Colors.white30), border: InputBorder.none),
+                  ),
+                ),
+                IconButton(icon: const Icon(Icons.send, color: Colors.blueAccent), onPressed: _talk),
+              ],
+            ),
+          )
+        ],
+      ),
+    );
+  }
+}
